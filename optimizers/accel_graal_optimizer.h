@@ -1,7 +1,7 @@
 #pragma once
 
 #include "optimizer.h"
-#include "vector_ops.h"
+#include "utils/vector_ops.h"
 #include <cmath>
 #include <limits>
 #include <algorithm>

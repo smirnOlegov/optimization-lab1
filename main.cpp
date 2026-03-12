@@ -1,11 +1,12 @@
 #include <iostream>
 #include <chrono>
 
-#include "constructive_real.h"
-#include "objective_functions.h"
-#include "optimizer.h"
-#include "accel_graal_optimizer.h"
-#include "utils.h"
+#include "src/constructive_real.h"
+#include "src/objective_functions.h"
+#include "optimizers/gradient_descent.h"
+#include "optimizers/genetic_algo.h"
+#include "optimizers/accel_graal_optimizer.h"
+#include "utils/utils.h"
 
 int main() {
     // Тест конструктивного числа

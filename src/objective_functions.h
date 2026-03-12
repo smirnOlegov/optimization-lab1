@@ -1,6 +1,6 @@
 #pragma once
 
-#include "types.h"
+#include "utils/types.h"
 #include <cmath>
 
 // Функция Розенброка 2D: f(x, y) = (1 - x)^2 + 100 * (y - x^2)^2
