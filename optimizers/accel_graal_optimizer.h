@@ -1,6 +1,7 @@
 #pragma once
 
 #include "optimizer.h"
+#include "utils/numerical_gradient.h"
 #include "utils/vector_ops.h"
 #include <cmath>
 #include <limits>
@@ -45,14 +46,13 @@ public:
         nu = gamma / (4.0 * theta * one_plus_gamma * one_plus_gamma);
     }
 
-    VectorData optimize(ObjectiveFunction f_orig, size_t /*dim*/) override {
+    OptimizationResult optimize(ObjectiveFunction f_orig, size_t /*dim*/,
+                                double target_value, double tolerance) override {
         // For MAXIMIZE: negate objective so we always minimize
         ObjectiveFunction f = f_orig;
         if (type == OptimizationType::MAXIMIZE) {
             f = [&f_orig](const VectorData& x) { return -f_orig(x); };
         }
-
-        size_t n = start.size();
 
         // Initialize: x_0 = x_tilde_0 = x_bar_0 = start
         VectorData x_k = start;
@@ -68,9 +68,24 @@ public:
 
         // Track best point seen (practical for non-convex)
         VectorData best_x = start;
-        double best_val = f(start);
+        double best_transformed_value = f(start);
+        double best_original_value = f_orig(start);
 
-        for (int k = 0; k < max_iterations; ++k) {
+        if (reached_target(best_original_value, target_value, tolerance)) {
+            return {best_x, best_original_value, 0, true};
+        }
+
+        auto consider_candidate = [&](const VectorData& point,
+                                      double transformed_value,
+                                      double original_value) {
+            if (transformed_value < best_transformed_value) {
+                best_transformed_value = transformed_value;
+                best_original_value = original_value;
+                best_x = point;
+            }
+        };
+
+        for (int iteration = 1; iteration <= max_iterations; ++iteration) {
             // Step 1: alpha_{k+1}
             double alpha_kp1 = (1.0 + gamma) * eta_k / (H_k + (1.0 + gamma) * eta_k);
 
@@ -115,11 +130,18 @@ public:
             // Step 8: H_{k+1}
             double H_kp1 = H_k + eta_kp1;
 
-            // Track best iterate
-            double val_kp1 = f(x_kp1);
-            if (val_kp1 < best_val) {
-                best_val = val_kp1;
-                best_x = x_kp1;
+            // Track best iterate among practical return candidates.
+            double x_kp1_value = f(x_kp1);
+            double x_kp1_original_value = f_orig(x_kp1);
+            consider_candidate(x_kp1, x_kp1_value, x_kp1_original_value);
+
+            double x_bar_kp1_value = f(x_bar_kp1);
+            double x_bar_kp1_original_value = f_orig(x_bar_kp1);
+            consider_candidate(x_bar_kp1, x_bar_kp1_value, x_bar_kp1_original_value);
+
+            if (reached_target(best_original_value, target_value, tolerance)) {
+                return {best_x, best_original_value,
+                        static_cast<size_t>(iteration), true};
             }
 
             // Shift variables for next iteration
@@ -133,9 +155,7 @@ public:
             grad_tilde_k = grad_tilde_kp1;
         }
 
-        // Return best point seen (practical choice for non-convex objectives)
-        // For convex objectives, x_bar_k (ergodic average) has theoretical guarantees
-        double bar_val = f(x_bar_k);
-        return (bar_val < best_val) ? x_bar_k : best_x;
+        return {best_x, best_original_value,
+                static_cast<size_t>(max_iterations), false};
     }
 };
