@@ -1,58 +1,22 @@
 #pragma once
 
-#include "types.h"
-#include "numerical_gradient.h"
+#include "utils/types.h"
+#include "optimizer.h"
 #include <random>
 #include <algorithm>
-
-// Базовый класс оптимизатора
-class Optimizer {
-protected:
-    OptimizationType type;
-
-public:
-    Optimizer(OptimizationType type) : type(type) {}
-    virtual ~Optimizer() = default;
-
-    virtual VectorData optimize(ObjectiveFunction f, size_t dim) = 0;
-};
-
-// Градиентный спуск
-class GradientDescentOptimizer : public Optimizer {
-    VectorData start;
-    double lr;
-    int epochs;
-
-public:
-    GradientDescentOptimizer(VectorData start, OptimizationType type,
-                             double lr = 0.001, int epochs = 5000)
-        : Optimizer(type), start(std::move(start)), lr(lr), epochs(epochs) {}
-
-    VectorData optimize(ObjectiveFunction f, size_t /*dim*/) override {
-        VectorData current = start;
-        double sign = (type == OptimizationType::MINIMIZE) ? -1.0 : 1.0;
-
-        for (int epoch = 0; epoch < epochs; ++epoch) {
-            VectorData grad = numerical_gradient(f, current);
-            for (size_t i = 0; i < current.size(); ++i) {
-                current[i] += sign * lr * grad[i];
-            }
-        }
-        return current;
-    }
-};
 
 // Генетический алгоритм (для непрерывных значений)
 class GeneticAlgorithmOptimizer : public Optimizer {
     int pop_size;
-    int epochs;
+    int max_generations;
 
 public:
     GeneticAlgorithmOptimizer(OptimizationType type,
-                              int pop_size = 100, int epochs = 500)
-        : Optimizer(type), pop_size(pop_size), epochs(epochs) {}
+                              int pop_size = 100, int max_generations = 500)
+        : Optimizer(type), pop_size(pop_size), max_generations(max_generations) {}
 
-    VectorData optimize(ObjectiveFunction f, size_t dim) override {
+    OptimizationResult optimize(ObjectiveFunction f, size_t dim,
+                                double target_value, double tolerance) override {
         std::mt19937 gen(42);
         std::uniform_real_distribution<> dis(-5.0, 5.0);
         std::normal_distribution<> mut_dis(0.0, 0.5);
@@ -70,7 +34,7 @@ public:
             return (type == OptimizationType::MINIMIZE) ? -val : val;
         };
 
-        for (int epoch = 0; epoch < epochs; ++epoch) {
+        auto evaluate_population = [&]() {
             // Оценка фитнеса
             std::vector<std::pair<double, VectorData>> fitness;
             for (const auto& ind : population) {
@@ -81,7 +45,16 @@ public:
             std::sort(fitness.begin(), fitness.end(), [](const auto& a, const auto& b) {
                 return a.first > b.first;
             });
+            return fitness;
+        };
 
+        auto fitness = evaluate_population();
+        double best_value = f(fitness.front().second);
+        if (reached_target(best_value, target_value, tolerance)) {
+            return {fitness.front().second, best_value, 0, true};
+        }
+
+        for (int generation = 1; generation <= max_generations; ++generation) {
             std::vector<VectorData> next_gen;
             // Элитизм: сохраняем топ 10%
             int elite_count = pop_size / 10;
@@ -105,18 +78,16 @@ public:
                 next_gen.push_back(child);
             }
             population = next_gen;
-        }
+            fitness = evaluate_population();
+            best_value = f(fitness.front().second);
 
-        // Возвращаем лучшего индивида
-        double best_fitness = -1e9;
-        VectorData best_ind;
-        for (const auto& ind : population) {
-            double fit = evaluate(ind);
-            if (fit > best_fitness) {
-                best_fitness = fit;
-                best_ind = ind;
+            if (reached_target(best_value, target_value, tolerance)) {
+                return {fitness.front().second, best_value,
+                        static_cast<size_t>(generation), true};
             }
         }
-        return best_ind;
+
+        return {fitness.front().second, best_value,
+                static_cast<size_t>(max_generations), false};
     }
 };
