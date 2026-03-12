@@ -102,8 +102,8 @@ int main() {
     // Оптимизация 2D Розенброка (Минимум в [1, 1], значение 0)
     VectorData start_2d = {0.0, 0.0};
     constexpr double rosenbrock_target = 0.0;
-    constexpr double tolerance_2d = 1e-2;
-    constexpr double tolerance_nd = 1e-1;
+    constexpr double tolerance_2d = 1e-6;
+    constexpr double tolerance_nd = 1e-5;
 
     std::cout << "==== ROSENBROCK 2D ====\n\n";
     std::cout << "Target value: " << rosenbrock_target
