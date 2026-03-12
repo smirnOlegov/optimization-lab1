@@ -2,20 +2,27 @@
 
 #include "types.h"
 #include <iostream>
-#include <iomanip>
 #include <string>
-#include <cmath>
 
-void print_result(const std::string& title, const VectorData& res, double val,
-                  size_t iterations, double target_value, bool converged) {
+inline void print_result(const std::string& title, const VectorData& res, ConstructiveReal val,
+                  size_t iterations, ConstructiveReal target_value, bool converged) {
     std::cout << "--- " << title << " ---\n";
-    std::cout << "Point: [";
+    std::cout << "Point:\n";
+
+    // Выводим каждую координату через встроенный метод print
     for (size_t i = 0; i < res.size(); ++i) {
-        std::cout << std::fixed << std::setprecision(5) << res[i] << (i == res.size() - 1 ? "" : ", ");
+        res[i].print("  x[" + std::to_string(i) + "]");
     }
-    std::cout << "]\nValue: " << val
-              << "\nIterations: " << iterations
-              << "\nAccuracy: " << std::abs(val - target_value)
-              << "\nStatus: " << (converged ? "target reached" : "max iterations reached")
+
+    // Выводим значение
+    val.print("Value");
+
+    std::cout << "Iterations: " << iterations << "\n";
+
+    // Ручное вычисление модуля разницы (аналог std::abs)
+    ConstructiveReal diff = (val < target_value) ? (target_value - val) : (val - target_value);
+    diff.print("Accuracy");
+
+    std::cout << "Status: " << (converged ? "target reached" : "max iterations reached")
               << "\n\n";
 }

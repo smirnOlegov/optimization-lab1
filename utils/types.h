@@ -2,8 +2,12 @@
 
 #include <vector>
 #include <functional>
+#include "../src/constructive_real.h"
 
-using VectorData = std::vector<double>;
-using ObjectiveFunction = std::function<double(const VectorData&)>;
+using VectorData = std::vector<ConstructiveReal>;
+using ObjectiveFunction = std::function<ConstructiveReal(const VectorData&)>;
 
-enum class OptimizationType { MINIMIZE, MAXIMIZE };
+enum class OptimizationType {
+    MINIMIZE,
+    MAXIMIZE
+};
