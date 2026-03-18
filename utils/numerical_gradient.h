@@ -6,6 +6,7 @@
 inline VectorData numerical_gradient(const ObjectiveFunction& f, const VectorData& x, ConstructiveReal h = ConstructiveReal(Rational(1, 100000))) {
     ConstructiveReal zero_val(Rational(0, 1));
     VectorData grad(x.size(), zero_val);
+    Rational grad_precision(1, 1000000000000000LL);
 
     for (size_t i = 0; i < x.size(); ++i) {
         VectorData x_plus = x;
@@ -16,7 +17,7 @@ inline VectorData numerical_gradient(const ObjectiveFunction& f, const VectorDat
 
         grad[i] = (f(x_plus) - f(x_minus)) / (ConstructiveReal(Rational(2, 1)) * h);
 
-        grad[i].collapse();
+        grad[i].collapse(grad_precision);
     }
     return grad;
 }

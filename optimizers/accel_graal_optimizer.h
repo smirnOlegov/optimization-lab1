@@ -20,8 +20,8 @@ class AcceleratedGRAALOptimizer : public Optimizer {
     static ConstructiveReal one() { return {Rational(1, 1)}; }
     static ConstructiveReal two() { return {Rational(2, 1)}; }
     static ConstructiveReal four() { return {Rational(4, 1)}; }
-    static ConstructiveReal tiny_eps() { return {Rational(1, 1000000)}; } // 1e-6 вместо 1e-9 вместо 1e-30 ;)
-    static ConstructiveReal huge_val() { return {Rational(10000, 1)}; } // вместо infinity 10^4
+    static ConstructiveReal tiny_eps() { return {Rational(1, 1000000)}; }
+    static ConstructiveReal huge_val() { return {Rational(10000, 1)}; }
 
     // Bregman divergence: B_f(x, z) = f(z) - f(x) - <grad_x, z - x>
     static ConstructiveReal bregman_divergence(const ObjectiveFunction& f,
@@ -61,7 +61,7 @@ public:
         : Optimizer(type), start(std::move(start)),
           max_iterations(max_iterations), eta_0(eta_0),
           theta(theta), gamma(gamma),
-          nu(Rational(0, 1)) // инициализация пустышкой
+          nu(Rational(0, 1))
     {
         // nu = gamma / (4 * theta * (1+gamma)^2)  — from constraint (19)
         ConstructiveReal one_plus_gamma = one() + gamma;
@@ -174,17 +174,14 @@ public:
                         static_cast<size_t>(iteration), true};
             }
 
-            // === ДОБАВИТЬ ЭТОТ БЛОК: СХЛОПЫВАНИЕ ДЕРЕВЬЕВ ===
-            // Задаем точность схлопывания (например, 1e-7).
-            // Это обрубит деревья и превратит их в ConstNode.
-            eta_kp1.collapse();
-            H_kp1.collapse();
-
+            Rational collapse_precision(1, 1000000000000LL); // 10^-12
+            eta_kp1.collapse(collapse_precision);
+            H_kp1.collapse(collapse_precision);
             for (size_t i = 0; i < x_kp1.size(); ++i) {
-                x_kp1[i].collapse();
-                x_bar_kp1[i].collapse();
-                x_tilde_kp1[i].collapse();
-                grad_tilde_kp1[i].collapse();
+                x_kp1[i].collapse(collapse_precision);
+                x_bar_kp1[i].collapse(collapse_precision);
+                x_tilde_kp1[i].collapse(collapse_precision);
+                grad_tilde_kp1[i].collapse(collapse_precision);
             }
 
             // Shift variables for next iteration

@@ -58,10 +58,10 @@ int main() {
     cr_mul.print("PI_approx * 2");
     cr_div.print("PI_approx / 2");
 
-    // 1. ПРОДВИНУТЫЙ Тест конструктивного числа
+    // Тест конструктивного числа чуть более крутой
     std::cout << "\n\n==== ADVANCED CONSTRUCTIVE REAL TEST ====\n\n";
 
-    // Генератор корня из 2 (Бинарный поиск на дробях) ---
+    // Генератор корня из 2
     auto sqrt2_gen = [](Rational target_delta) {
         Rational L(1, 1); // Нижняя граница (1)
         Rational R(2, 1); // Верхняя граница (2)
@@ -70,26 +70,24 @@ int main() {
         // Пока ширина интервала больше требуемой, сужаем его пополам
         while (target_delta < (R - L)) {
             Rational M = (L + R) / Rational(2, 1);
-            if ((M * M) < two) L = M; // Если M^2 < 2, то корень правее
-            else R = M;               // Иначе корень левее
+            if ((M * M) < two) L = M;
+            else R = M;
         }
         return std::make_pair(L, R);
     };
 
-    // Создаем конструктивное число sqrt(2). Изначально мы лишь знаем, что оно в [1, 2].
     ConstructiveReal Sqrt2(Rational(1, 1), Rational(2, 1), sqrt2_gen);
 
     std::cout << "[Test 1] Sqrt(2) boundaries check:\n";
     ConstructiveReal low_bound_sqrt(Rational(1414, 1000));  // 1.414
     ConstructiveReal high_bound_sqrt(Rational(1415, 1000)); // 1.415
 
-    // В этот момент сработает refine() и бинарный поиск вычислит нужную точность!
     std::cout << "Is 1.414 < sqrt(2)? " << (low_bound_sqrt < Sqrt2 ? "Yes" : "No") << "\n";
     std::cout << "Is sqrt(2) < 1.415? " << (Sqrt2 < high_bound_sqrt ? "Yes" : "No") << "\n\n";
 
-    // --- Б. Вычисления с иррациональными числами ---
+    // Вычисления с иррациональными числами ---
     std::cout << "[Test 2] Sqrt(2) * Sqrt(2) approx 2:\n";
-    ConstructiveReal Sqrt2_Squared = Sqrt2 * Sqrt2; // Строим дерево: MulNode(Sqrt2, Sqrt2)
+    ConstructiveReal Sqrt2_Squared = Sqrt2 * Sqrt2;
 
     ConstructiveReal low_two(Rational(199, 100)); // 1.99
     ConstructiveReal high_two(Rational(201, 100)); // 2.01
@@ -99,13 +97,11 @@ int main() {
     std::cout << "Is 1.99 < (sqrt(2) * sqrt(2))? " << (low_two < Sqrt2_Squared ? "Yes" : "No") << "\n";
     std::cout << "Is (sqrt(2) * sqrt(2)) < 2.01? " << (Sqrt2_Squared < high_two ? "Yes" : "No") << "\n\n";
 
-    // --- В. Генератор числа Эйлера (e) через ряд Тейлора ---
     auto e_gen = [](Rational target_delta) {
         Rational L(2, 1); // Первые члены: 1/0! + 1/1! = 2
         int64_t k = 1;
         int64_t fact = 1;
 
-        // Оценка остатка ряда. Верхняя граница R = L + 1/(k * k!)
         Rational R = L + Rational(1, fact * k);
 
         while (target_delta < (R - L)) {
@@ -117,7 +113,6 @@ int main() {
         return std::make_pair(L, R);
     };
 
-    // Изначально знаем, что e где-то между 2 и 3
     ConstructiveReal E_val(Rational(2, 1), Rational(3, 1), e_gen);
 
     std::cout << "[Test 3] Euler's number (e) boundaries check:\n";
@@ -129,7 +124,7 @@ int main() {
 
     ConstructiveReal zero_val(Rational(0, 1));
 
-    // Оптимизация 2D Розенброка (Минимум в [1, 1], значение 0)
+    // Оптимизация 2D Розенброка
     VectorData start_2d = {zero_val, zero_val};
     ConstructiveReal rosenbrock_target = zero_val;
     ConstructiveReal tolerance_2d(Rational(1, 1000));
@@ -200,16 +195,15 @@ int main() {
         GradientDescentOptimizer gd(start_2d, OptimizationType::MINIMIZE, lr_001, 200000);
         OptimizationResult res = gd.optimize(Rosenbrock2D, 2, rosenbrock_target, tolerance_2d);
 
-        // сохраняем историю в файл
         save_history_to_csv("visualisation/history/gd_history.csv", gd.history);
 
-        return res; // Возвращаем результат
+        return res;
     });
 
     print_benchmark(gd_2d, rosenbrock_target);
 
     TimedRun ga_2d = run_benchmark("Genetic Algorithm", [&] {
-        GeneticAlgorithmOptimizer ga(OptimizationType::MINIMIZE, 200, 5000);
+        GeneticAlgorithmOptimizer ga(OptimizationType::MINIMIZE, 100, 500);
         OptimizationResult res = ga.optimize(Rosenbrock2D, 2, rosenbrock_target, tolerance_2d);
 
         save_history_to_csv("visualisation/history/ga_history.csv", ga.history);
@@ -218,9 +212,9 @@ int main() {
     });
     print_benchmark(ga_2d, rosenbrock_target);
 
-    ConstructiveReal eta_graal(Rational(5, 1000));   // 0.005
-    ConstructiveReal theta_graal(Rational(2, 1));    // 2.0
-    ConstructiveReal gamma_graal(Rational(1, 100));  // 0.01
+    ConstructiveReal eta_graal(Rational(5, 1000));
+    ConstructiveReal theta_graal(Rational(2, 1));
+    ConstructiveReal gamma_graal(Rational(1, 100));
 
     TimedRun graal_2d = run_benchmark("Accel GRAAL", [&] {
         AcceleratedGRAALOptimizer graal(start_2d, OptimizationType::MINIMIZE, 200000,
@@ -232,7 +226,6 @@ int main() {
 
     print_iteration_comparison("Rosenbrock 2D", {gd_2d, ga_2d, graal_2d});
 
-    // Оптимизация многомерной функции Розенброк�� (N=5)
     std::cout << "==== ROSENBROCK ND (N=5) ====\n\n";
     VectorData start_nd = {zero_val, zero_val, zero_val, zero_val, zero_val};
     std::cout << "Target value: 0\n\n";
@@ -244,8 +237,7 @@ int main() {
     print_benchmark(gd_nd, rosenbrock_target);
 
     TimedRun ga_nd = run_benchmark("Genetic Algorithm", [&] {
-        // 1000 особей, 10000 поколений
-        GeneticAlgorithmOptimizer ga(OptimizationType::MINIMIZE, 1000, 10000);
+        GeneticAlgorithmOptimizer ga(OptimizationType::MINIMIZE, 200, 5000); // можно снизить потом
         return ga.optimize(RosenbrockND, 5, rosenbrock_target, tolerance_nd);
     });
     print_benchmark(ga_nd, rosenbrock_target);

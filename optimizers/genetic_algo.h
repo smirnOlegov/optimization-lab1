@@ -11,13 +11,11 @@ class GeneticAlgorithmOptimizer : public Optimizer {
     int pop_size;
     int max_generations;
 
-    // Вспомогательная функция для перевода double в ConstructiveReal
     static ConstructiveReal double_to_creal(double val) {
         long long num = std::round(val * 1000000.0);
         return {Rational(num, 1000000)};
     }
 
-    // Вспомогательная функция для перевода точки в вектор double
     std::vector<double> point_to_double(const VectorData& pt) {
         std::vector<double> res(pt.size());
         for (size_t i = 0; i < pt.size(); ++i) {
@@ -27,7 +25,6 @@ class GeneticAlgorithmOptimizer : public Optimizer {
     }
 
 public:
-    // Поле класса: сохраняем историю лучших особей
     std::vector<std::vector<double>> history;
 
     GeneticAlgorithmOptimizer(OptimizationType type,
@@ -36,7 +33,6 @@ public:
 
     OptimizationResult optimize(ObjectiveFunction f, size_t dim,
                                 ConstructiveReal target_value, ConstructiveReal tolerance) override {
-        // Очищаем историю при новом запуске оптимизации
         history.clear();
 
         std::mt19937 gen(42);
@@ -54,9 +50,10 @@ public:
             }
         }
 
+        Rational ga_precision(1, 1000000000LL);
         auto evaluate = [&](const VectorData& ind) {
             ConstructiveReal val = f(ind);
-            val.collapse();
+            val.collapse(ga_precision);
             if (type == OptimizationType::MINIMIZE) return zero_val - val;
             return val;
         };
@@ -75,7 +72,6 @@ public:
 
         auto fitness = evaluate_population();
         ConstructiveReal best_value = f(fitness.front().second);
-        best_value.collapse();
 
         // Записываем лучшую особь нулевого поколения в историю
         history.push_back(point_to_double(fitness.front().second));
@@ -93,6 +89,9 @@ public:
             }
             return fitness[best_idx].second;
         };
+
+        int collapse_epoch = 5;
+        Rational collapse_precision(1, 1000000000000LL);
 
         for (int generation = 1; generation <= max_generations; ++generation) {
             std::vector<VectorData> next_gen;
@@ -118,15 +117,29 @@ public:
                     if (std::uniform_real_distribution<>(0, 1)(gen) < (1.0 / dim)) {
                         child[i] = child[i] + double_to_creal(mut_dis(gen));
                     }
-                    child[i].collapse();
+
+                    child[i].collapse(ga_precision);
                 }
                 next_gen.push_back(child);
             }
-            population = next_gen;
-            fitness = evaluate_population();
 
+            population = next_gen;
+
+            if (generation % collapse_epoch == 0) {
+                for (auto& ind : population) {
+                    for (auto& gene : ind) {
+                        gene.collapse(collapse_precision);
+                    }
+                }
+            }
+
+            fitness = evaluate_population();
             best_value = f(fitness.front().second);
-            best_value.collapse();
+            best_value.collapse(ga_precision);
+
+            if (generation % collapse_epoch == 0) {
+                best_value.collapse(collapse_precision);
+            }
 
             // Сохраняем лучшую особь текущего поколения
             history.push_back(point_to_double(fitness.front().second));
@@ -136,6 +149,7 @@ public:
                         static_cast<size_t>(generation), true};
             }
         }
+
 
         return {fitness.front().second, best_value,
                 static_cast<size_t>(max_generations), false};

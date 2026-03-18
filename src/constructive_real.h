@@ -2,52 +2,16 @@
 
 #include <functional>
 #include <iostream>
+#include <iomanip>
 #include <memory>
-#include <numeric>
-#include <stdexcept>
 #include <string>
 #include <algorithm>
 #include <initializer_list>
 #include <cmath>
+#include <boost/multiprecision/cpp_int.hpp>
 
 // Рациональное число (Множество Q)
-class Rational {
-public:
-    int64_t num, den;
-    void reduce() {
-        if (den == 0) den = 1; // Спасает от краша
-
-        int64_t gcd = std::gcd(num, den);
-        num /= gcd; den /= gcd;
-        if (den < 0) { num = -num; den = -den; }
-
-        // Безопасный предел 2 миллиарда (чтобы квадрат помещался в int64_t)
-        const int64_t MAX_SAFE = 2000000000LL;
-        while (std::abs(num) > MAX_SAFE || std::abs(den) > MAX_SAFE) {
-            num /= 10;
-            den /= 10;
-            if (den == 0) den = 1;
-        }
-    }
-    Rational(int64_t n = 0, int64_t d = 1) : num(n), den(d) { reduce(); }
-
-    Rational operator+(const Rational& o) const { return {num*o.den + o.num*den, den*o.den}; }
-    Rational operator-(const Rational& o) const { return {num*o.den - o.num*den, den*o.den}; }
-    Rational operator*(const Rational& o) const { return {num*o.num, den*o.den}; }
-    Rational operator/(const Rational& o) const { return {num*o.den, den*o.num}; }
-
-    bool operator<(const Rational& o) const { return num*o.den < o.num*den; }
-    bool operator>(const Rational& o) const { return o < *this; }
-    bool operator<=(const Rational& o) const { return !(o < *this); }
-    bool operator==(const Rational& o) const { return num*o.den == o.num*den; }
-    bool operator!=(const Rational& o) const { return !(*this == o); }
-
-    friend std::ostream& operator<<(std::ostream& os, const Rational& r) {
-        return (r.den == 1) ? (os << r.num) : (os << r.num << "/" << r.den);
-    }
-
-    operator double() const { return static_cast<double>(num) / den; }
-};
+using Rational = boost::multiprecision::cpp_rational;
 
 // Базовый Узел (RealNode)
 class RealNode {
@@ -56,6 +20,7 @@ public:
     RealNode(Rational low, Rational high) : a1(low), a2(high), delta(high - low) {}
     virtual ~RealNode() = default;
     virtual void refine(Rational target_delta) = 0;
+    virtual bool is_exact() const { return false; }
 };
 
 // Константа
@@ -63,6 +28,7 @@ class ConstNode : public RealNode {
 public:
     ConstNode(Rational exact) : RealNode(exact, exact) {}
     void refine(Rational target_delta) override {} // Константа всегда точная
+    bool is_exact() const override { return true; }
 };
 
 // Базовый генератор
@@ -81,9 +47,11 @@ public:
         a2 = new_bounds.second;
         delta = a2 - a1;
     }
+
+    bool is_exact() const override { return false; }
 };
 
-// СЛОЖЕНИЕ
+// Сложение
 class AddNode : public RealNode {
     std::shared_ptr<RealNode> left, right;
 public:
@@ -101,7 +69,19 @@ public:
     }
 };
 
-// ВЫЧИТАНИЕ
+// Замороженный интервал (результат коллапса)
+class IntervalNode : public RealNode {
+public:
+    IntervalNode(Rational low, Rational high) : RealNode(low, high) {}
+
+    void refine(Rational target_delta) override {
+        if (target_delta < delta) { }
+    }
+
+    bool is_exact() const override { return false; }
+};
+
+// Вычитание
 class SubNode : public RealNode {
     std::shared_ptr<RealNode> left, right;
 public:
@@ -119,7 +99,7 @@ public:
     }
 };
 
-// УМНОЖЕНИЕ
+// Умножение
 class MulNode : public RealNode {
     std::shared_ptr<RealNode> left, right;
 
@@ -151,23 +131,19 @@ public:
 
             update_bounds();
 
-            // Если дельта не изменилась (достигнут лимит Rational), выходим
             if (delta == old_delta) break;
         }
     }
 };
 
-// ДЕЛЕНИЕ
+// Деление
 class DivNode : public RealNode {
     std::shared_ptr<RealNode> left, right;
 
     void update_bounds() {
         if (right->a1 <= Rational(0, 1) && Rational(0, 1) <= right->a2) {
-            // Если интервал знаменателя уже достаточно узкий, но всё ещё содержит 0
-            // (значит число в реальности равно 0), мы искусственно ��двигаем его,
-            // чтобы избежать деления на 0 и бесконечных циклов.
             if (right->delta < Rational(1, 100000)) { // Меньше 1e-5
-                // Подменяем знаменатель на крошечное положительное число
+                // Подменяем знаменатель на крошечное положительное число если число ~ 0
                 Rational tiny(1, 100000);
                 Rational inv_a1 = Rational(1, 1) / tiny;
                 Rational inv_a2 = Rational(1, 1) / tiny;
@@ -182,8 +158,6 @@ class DivNode : public RealNode {
                 return;
             }
 
-            // Если интервал ещё широкий, просто возвращаем безопасный "широкий" результат,
-            // чтобы refine() мог продолжить сужать его дальше.
             a1 = Rational(-1000000000LL, 1);
             a2 = Rational(1000000000LL, 1);
             delta = a2 - a1;
@@ -301,7 +275,6 @@ public:
     }
 };
 
-// Обёртка
 class ConstructiveReal {
 private:
     std::shared_ptr<RealNode> root;
@@ -317,15 +290,32 @@ public:
         : root(std::make_shared<GeneratorNode>(start_a1, start_a2, func)) {}
 
     ConstructiveReal operator+(const ConstructiveReal& other) const {
+        if (this->root->is_exact() && other.root->is_exact()) {
+            return ConstructiveReal(this->root->a1 + other.root->a1);
+        }
         return {std::make_shared<AddNode>(this->root, other.root)};
     }
+
     ConstructiveReal operator-(const ConstructiveReal& other) const {
+        if (this->root->is_exact() && other.root->is_exact()) {
+            return ConstructiveReal(this->root->a1 - other.root->a1);
+        }
         return {std::make_shared<SubNode>(this->root, other.root)};
     }
+
     ConstructiveReal operator*(const ConstructiveReal& other) const {
+        if (this->root->is_exact() && other.root->is_exact()) {
+            return ConstructiveReal(this->root->a1 * other.root->a1);
+        }
         return {std::make_shared<MulNode>(this->root, other.root)};
     }
+
     ConstructiveReal operator/(const ConstructiveReal& other) const {
+        if (this->root->is_exact() && other.root->is_exact()) {
+            // Защита от деления на 0
+            if (other.root->a1 == 0) throw std::runtime_error("Division by zero");
+            return ConstructiveReal(this->root->a1 / other.root->a1);
+        }
         return {std::make_shared<DivNode>(this->root, other.root)};
     }
     ConstructiveReal exp() const {
@@ -339,24 +329,40 @@ public:
         return static_cast<double>(this->root->a1);
     }
 
-    void collapse() {
-        // Уточняем дерево до высокой точности (1e-8)
-        Rational target(1, 100000000LL);
-        this->root->refine(target);
+    void collapse(Rational target_precision = Rational(1, 1000000000LL)) {
+        this->root->refine(target_precision);
 
-        // Берем вычисленное значение
-        double val = static_cast<double>(this->root->a1);
+        Rational low = this->root->a1;
+        Rational high = this->root->a2;
 
-        // Превращаем в точную константу со знаменателем 10^8
-        long long new_den = 100000000LL;
-        long long new_num = std::round(val * new_den);
+        // Округление
+        Rational center = (low + high) / Rational(2, 1);
+        double center_d = center.convert_to<double>(); // преобразуем в double (отбрасываем много цифр)
 
-        // Заменяем дерево, очищая память
-        this->root = std::make_shared<ConstNode>(Rational(new_num, new_den));
+        // Превращаем обратно в легкую дробь с точностью 10^-9
+        long long MULT = 1000000000LL;
+        long long num = std::round(center_d * MULT);
+        Rational simplified_center(num, MULT);
+
+        // Расширяем интервал, чтобы покрыть ошибку округления (10^-9)
+        Rational error_margin(1, MULT);
+        Rational new_low = simplified_center - error_margin;
+        Rational new_high = simplified_center + error_margin;
+
+        this->root = std::make_shared<IntervalNode>(new_low, new_high);
     }
 
     void print(const std::string& name) const {
-        std::cout << name << " = [" << root->a1 << ", " << root->a2 << "], delta = " << root->delta << "\n";
+        double lower_bound = this->root->a1.convert_to<double>();
+        double upper_bound = this->root->a2.convert_to<double>();
+        double current_delta = this->root->delta.convert_to<double>();
+
+        std::cout << name << " = ["
+                  << std::fixed << std::setprecision(8) << lower_bound << ", "
+                  << std::fixed << std::setprecision(8) << upper_bound << "], "
+                  << "delta = " << std::scientific << current_delta << "\n";
+
+        std::cout.unsetf(std::ios_base::floatfield);
     }
 
     bool operator<(const ConstructiveReal& other) const {
@@ -373,7 +379,6 @@ public:
             other.root->refine(current_precision);
         }
 
-        // Предотвращает зависание генетического алгоритма
         return false;
     }
 };

@@ -14,11 +14,11 @@ def rosenbrock_grad(x, y):
     dy = 200 * (y - x**2)
     return np.array([dx, dy])
 
-if os.path.exists('gd_history.csv'):
-    path_gd = pd.read_csv('gd_history.csv', header=None, skiprows=1).values[:, :2]
+if os.path.exists('history/gd_history.csv'):
+    path_gd = pd.read_csv('history/gd_history.csv', header=None, skiprows=1).values[:, :2]
 
-if os.path.exists('ga_history.csv'):
-    path_cd = pd.read_csv('ga_history.csv', header=None, skiprows=1).values[:, :2]
+if os.path.exists('history/ga_history.csv'):
+    path_cd = pd.read_csv('history/ga_history.csv', header=None, skiprows=1).values[:, :2]
 
 z_gd = rosenbrock(path_gd[:, 0], path_gd[:, 1])
 z_cd = rosenbrock(path_cd[:, 0], path_cd[:, 1])

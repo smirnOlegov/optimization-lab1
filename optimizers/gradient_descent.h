@@ -13,7 +13,6 @@ class GradientDescentOptimizer : public Optimizer {
     ConstructiveReal lr;
     int max_iterations;
 
-    // Вспомогательная функция: переводит std::vector<ConstructiveReal> в std::vector<double>
     std::vector<double> point_to_double(const VectorData& pt) {
         std::vector<double> res(pt.size());
         for (size_t i = 0; i < pt.size(); ++i) {
@@ -51,14 +50,25 @@ public:
             return {current, current_value, 0, true};
         }
 
+        int collapse_epoch = 10; // Каждые 10 шагов фиксируем состояние
+        Rational collapse_precision(1, 1000000000000000LL);
+
         for (int iteration = 1; iteration <= max_iterations; ++iteration) {
             VectorData grad = numerical_gradient(f, current);
+
             for (size_t i = 0; i < current.size(); ++i) {
                 current[i] = current[i] + (sign * lr * grad[i]);
-                current[i].collapse();
             }
+
             current_value = f(current);
-            current_value.collapse();
+
+            // Периодический коллапс
+            if (iteration % collapse_epoch == 0) {
+                for (size_t i = 0; i < current.size(); ++i) {
+                    current[i].collapse(collapse_precision);
+                }
+                current_value.collapse(collapse_precision);
+            }
 
             // Записываем текущую точку в историю
             history.push_back(point_to_double(current));
