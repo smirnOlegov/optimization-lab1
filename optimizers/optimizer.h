@@ -1,12 +1,12 @@
 #pragma once
 
-#include "utils/types.h"
+#include "../utils/types.h"
 #include <cmath>
 #include <random>
 
 struct OptimizationResult {
     VectorData point;
-    double value;
+    ConstructiveReal value;
     size_t iterations;
     bool converged;
 };
@@ -16,15 +16,17 @@ class Optimizer {
 protected:
     OptimizationType type;
 
-    bool reached_target(double value, double target_value, double tolerance) const {
-        return std::abs(value - target_value) <= tolerance;
+    static bool reached_target(const ConstructiveReal &value, const ConstructiveReal& target_value, const ConstructiveReal &tolerance) {
+        return (value - target_value < tolerance) && (target_value - value < tolerance);
     }
 
 public:
+    std::vector<VectorData> history;
+
     Optimizer(OptimizationType type) : type(type) {}
     virtual ~Optimizer() = default;
 
     virtual OptimizationResult optimize(ObjectiveFunction f, size_t dim,
-                                        double target_value, double tolerance) = 0;
+                                        ConstructiveReal target_value, ConstructiveReal tolerance) = 0;
 };
 
